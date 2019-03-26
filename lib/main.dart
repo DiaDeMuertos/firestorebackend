@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() => runApp(MyApp());
 
@@ -19,30 +19,16 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MockBandInfo {
-  MockBandInfo({this.name, this.votes});
-
-  final String name;
-  final int votes;
-}
-
 class MyHomePage extends StatelessWidget {
   MyHomePage({Key key}) : super(key: key);
 
-  final List<MockBandInfo> _bandList = [
-    MockBandInfo(name: 'Mo Bunny, Mo Problems', votes: 0),
-    MockBandInfo(name: 'Jam and the Angry Biscuits', votes: 0),
-    MockBandInfo(name: 'The Toddler Pockets', votes: 0),
-    MockBandInfo(name: 'Everybody Loves My Pants', votes: 0),
-  ];
-
-  Widget _buildListItem(BuildContext context, MockBandInfo bandInfo) {
+  Widget _buildListItem(BuildContext context, DocumentSnapshot document) {
     return ListTile(
       title: Row(
         children: [
           Expanded(
             child: Text(
-              bandInfo.name,
+              document['name'],
               style: Theme.of(context).textTheme.headline,
             ),
           ),
@@ -50,24 +36,40 @@ class MyHomePage extends StatelessWidget {
             decoration: BoxDecoration(color: Colors.purple[50]),
             padding: EdgeInsets.all(10.0),
             child: Text(
-              bandInfo.votes.toString(),
+              document['votes'].toString(),
+              style: Theme.of(context).textTheme.title,
             ),
           ),
         ],
       ),
       onTap: () {
-        print('Should increase votes here.');
+        Firestore.instance.runTransaction((transaction) async {
+          DocumentSnapshot freshSnap =
+              await transaction.get(document.reference);
+          await transaction.update(freshSnap.reference, {
+            'votes': freshSnap['votes'] + 1,
+          });
+        });
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemExtent: 80.0,
-      itemCount: _bandList.length,
-      itemBuilder: (context, index) {
-        return _buildListItem(context, _bandList[index]);
+    return StreamBuilder(
+      stream: Firestore.instance.collection('bandnames').snapshots(),
+      builder: (context, snapshoot) {
+        if (!snapshoot.hasData) {
+          return Text('Loading....');
+        }
+
+        return ListView.builder(
+          itemExtent: 80.0,
+          itemCount: snapshoot.data.documents.length,
+          itemBuilder: (context, index) {
+            return _buildListItem(context, snapshoot.data.documents[index]);
+          },
+        );
       },
     );
   }
